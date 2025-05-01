@@ -1,0 +1,133 @@
+type Patient @model @auth(rules: [{ allow: owner }, { allow: private, operations: [read] }]) {
+  id: ID!
+  patientID: String!
+  title: String
+  patientName: String!
+  mobileNumber: String!
+  landlineNumber: String
+  city: String
+  emailId: String
+  address: String
+  address2: String
+  religion: String
+  dateOfBirth: AWSDate
+  age: Int
+  bloodGroup: String
+  gender: String
+  owner: String
+}
+type Treatment @model @auth(rules: [{ allow: owner }, { allow: private, operations: [read] }]) {
+  id: ID!
+  treatmentName: String!
+  price: Float!
+  description: String
+  doctorID: ID
+  category: String
+  duration: Int
+  discount: Float
+  insuranceCovered: Boolean
+  notes: String
+  imageUrl: String
+  owner: String
+}
+type PatientChiefCompliant @model @auth(
+    rules: [
+      { allow: owner }
+      { allow: groups, groups: ["Admin"], operations: [create, read, update, delete] }
+      { allow: private, operations: [create, read, update, delete] }
+    ]
+  ) {
+  id: ID!
+  profileId: String!
+  patientName: String
+  mobileNumber: String
+  chiefComplaint: String
+  findings: String
+  diagnosis: String
+  date: AWSDate
+  doctorname: String
+  payment: String
+  treatment: String
+  owner: String
+}
+type PatientTreatment @model @auth(
+    rules: [
+      { allow: owner }
+      { allow: groups, groups: ["Admin"], operations: [create, read, update, delete] }
+      { allow: private, operations: [create, read, update, delete] }
+    ]
+  ) {
+  id: ID!
+  invoiceNumber: String
+  patientID: ID! # Reference to the Patient Table
+  treatmentID: ID! # Reference to the Treatment Table
+  treatmentName: String!
+  price: Float!
+  discount: Float
+  totalAmount: Float
+  date: AWSDate
+  doctorID: ID
+  modeOfPayment: String
+  owner: String
+}
+type Doctor @model @auth(
+  rules: [
+    { allow: owner }
+    { allow: groups, groups: ["Admin"], operations: [create, read, update, delete] }
+    { allow: private, operations: [create, read, update, delete] }
+  ]
+) {
+  id: ID!
+  doctorName: String!
+  doctorID: String!
+  email: String!
+  phone: String!
+  specialization: String!
+  experience: Int!
+  owner: String
+}
+type Appointment @model @auth(
+    rules: [
+      { allow: owner }
+      { allow: groups, groups: ["Admin"], operations: [create, read, update, delete] }
+      { allow: private, operations: [create, read, update, delete] }
+    ]
+  ) {
+  id: ID!
+  patientID: String! # Reference to the Patient Table
+  patientName: String!
+  phoneNumber: String!
+  appointmentDateAndTime: AWSDateTime!
+  complaint: String!
+  doctorID: String # Reference to the Doctor Table (Optional)
+  doctorName: String
+  owner: String
+}
+type Prescription @model @auth(
+    rules: [
+      { allow: owner }
+      { allow: groups, groups: ["Admin"], operations: [create, read, update, delete] }
+      { allow: private, operations: [create, read, update, delete] }
+    ]
+  ) {
+  id: ID!
+  patientID: String! # Reference to the Patient Table
+  patientName: String!
+  doctorID: String! # Reference to the Doctor Table
+  doctorName: String!
+  prescription: String!
+  date: AWSDate!
+  owner: String
+}
+type LastRecordID @model @auth(
+    rules: [
+      { allow: owner }
+      { allow: groups, groups: ["Admin"], operations: [create, read, update, delete] }
+      { allow: private, operations: [create, read, update, delete] }
+    ]
+  ) {
+  id: ID!
+  lastPatientID: String!
+  newPatientID: String!
+  owner: String
+}

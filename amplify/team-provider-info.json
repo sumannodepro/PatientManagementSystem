@@ -1,0 +1,29 @@
+{
+  "dev": {
+    "awscloudformation": {
+      "AuthRoleName": "amplify-patientmanagementsys-dev-96081-authRole",
+      "UnauthRoleArn": "arn:aws:iam::471112786075:role/amplify-patientmanagementsys-dev-96081-unauthRole",
+      "AuthRoleArn": "arn:aws:iam::471112786075:role/amplify-patientmanagementsys-dev-96081-authRole",
+      "Region": "ap-south-1",
+      "DeploymentBucketName": "amplify-patientmanagementsys-dev-96081-deployment",
+      "UnauthRoleName": "amplify-patientmanagementsys-dev-96081-unauthRole",
+      "StackName": "amplify-patientmanagementsys-dev-96081",
+      "StackId": "arn:aws:cloudformation:ap-south-1:471112786075:stack/amplify-patientmanagementsys-dev-96081/51a78210-f010-11ef-bbf9-0a6cd9afd031",
+      "AmplifyAppId": "d3po3nrbgkvby0"
+    },
+    "categories": {
+      "auth": {
+        "patientmanagementsysc78e7709": {}
+      },
+      "hosting": {
+        "S3AndCloudFront": {}
+      },
+      "api": {
+        "patientmanagementsys": {}
+      },
+      "storage": {
+        "patientfiles": {}
+      }
+    }
+  }
+}

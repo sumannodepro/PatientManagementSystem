@@ -1,0 +1,11 @@
+{
+  "AppSyncApiName": "patientmanagementsys",
+  "DynamoDBBillingMode": "PAY_PER_REQUEST",
+  "DynamoDBEnableServerSideEncryption": false,
+  "AuthCognitoUserPoolId": {
+    "Fn::GetAtt": [
+      "authpatientmanagementsysc78e7709",
+      "Outputs.UserPoolId"
+    ]
+  }
+}
