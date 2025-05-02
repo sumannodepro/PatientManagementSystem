@@ -1,34 +1,48 @@
-#dwv {
-  height: 90%; }
+/* DwvComponent.css */
 
-.button-row {
-  text-align: center;
-}
-
-/* Layers */
+/* Ensure consistent viewer sizing and scroll handling */
 .layerGroup {
-  
-  position: relative;
-  padding: 0;
+  background-color: #000;
+  overflow: hidden;
   display: flex;
+  align-items: center;
   justify-content: center;
-  height: 90%;
+  position: relative;
+  box-sizing: border-box;
 }
-.layer {
-  position: absolute;
-  pointer-events: none; }
-.drawDiv {
-  position: absolute; pointer-events: none; }
 
-/* drag&drop */
-.dropBox {
-  margin: auto;
-  text-align: center; vertical-align: middle;
-  width: 50%; height: 75%; }
-.dropBoxBorder {
-  border: 5px dashed #e8eaf6; /*indigo:light*/ }
-.dropBoxBorder:hover {
-  border: 5px dashed #3f51b5; /*indigo*/  }
-#input-file-link {
-  text-decoration-line: underline;
+/* Force canvas inside viewer to scale properly */
+.layerGroup canvas {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+}
+
+/* Add spacing between viewers */
+#dwv .viewer-container {
+  display: flex;
+  justify-content: space-around;
+  gap: 12px;
+  margin-top: 16px;
+}
+
+/* Improve dropbox appearance */
+#dropBox {
+  text-align: center;
+  margin-top: 20px;
+  color: #333;
+  font-weight: 500;
+  font-size: 14px;
+}
+
+#dropBox label {
+  background-color: #1976d2;
+  color: white;
+  padding: 6px 12px;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+#dropBox label:hover {
+  background-color: #1565c0;
 }

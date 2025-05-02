@@ -49,7 +49,7 @@ export default function IOSViewerPage({ selectedPatient }) {
             >
               {isFullScreen && activePane === 'dicom' ? <Close /> : <Fullscreen />}
             </IconButton>
-            <DWV classes={styles} />
+            <DWV classes={styles} selectedPatient={selectedPatient} />
           </Box>
 
           {/* STL Viewer Pane */}
@@ -76,7 +76,7 @@ export default function IOSViewerPage({ selectedPatient }) {
               >
                 {isFullScreen && activePane === 'stl' ? <Close /> : <Fullscreen />}
               </IconButton>
-              <STLViewer {...selectedPatient}/>
+              <STLViewer selectedPatient={selectedPatient}/>
             </Box>
           )}
         </Box>

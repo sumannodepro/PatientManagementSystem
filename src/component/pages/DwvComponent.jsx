@@ -1,18 +1,20 @@
+// DwvComponent with full 3-view CBCT viewer and S3 ZIP upload/download
+
 import React from 'react';
 import PropTypes from 'prop-types';
 import { styled } from '@mui/material/styles';
-
 import Typography from '@mui/material/Typography';
-
 import Stack from '@mui/material/Stack';
 import LinearProgress from '@mui/material/LinearProgress';
-
-import Link from '@mui/material/Link';
 import IconButton from '@mui/material/IconButton';
 import ToggleButton from '@mui/material/ToggleButton';
 import ToggleButtonGroup from '@mui/material/ToggleButtonGroup';
+import Dialog from '@mui/material/Dialog';
+import AppBar from '@mui/material/AppBar';
+import Slide from '@mui/material/Slide';
+import Toolbar from '@mui/material/Toolbar';
+import Button from '@mui/material/Button';
 
-// https://mui.com/material-ui/material-icons/
 import CloseIcon from '@mui/icons-material/Close';
 import RefreshIcon from '@mui/icons-material/Refresh';
 import MenuIcon from '@mui/icons-material/Menu';
@@ -20,493 +22,218 @@ import ContrastIcon from '@mui/icons-material/Contrast';
 import SearchIcon from '@mui/icons-material/Search';
 import LibraryBooksIcon from '@mui/icons-material/LibraryBooks';
 import StraightenIcon from '@mui/icons-material/Straighten';
-import CameraswitchIcon from '@mui/icons-material/Cameraswitch';
-
-import Dialog from '@mui/material/Dialog';
-import AppBar from '@mui/material/AppBar';
-import Slide from '@mui/material/Slide';
-import Toolbar from '@mui/material/Toolbar';
-
 
 import './DwvComponent.css';
-import {
-  App,
-  getDwvVersion,
-  decoderScripts
-} from 'dwv';
+import { App, getDwvVersion, decoderScripts } from 'dwv';
+import JSZip from 'jszip';
+import { Storage } from 'aws-amplify';
+import dayjs from 'dayjs';
 
-// Image decoders (for web workers)
 decoderScripts.jpeg2000 = `${import.meta.env.BASE_URL}assets/dwv/decoders/pdfjs/decode-jpeg2000.js`;
 decoderScripts["jpeg-lossless"] = `${import.meta.env.BASE_URL}assets/dwv/decoders/rii-mango/decode-jpegloss.js`;
 decoderScripts["jpeg-baseline"] = `${import.meta.env.BASE_URL}assets/dwv/decoders/pdfjs/decode-jpegbaseline.js`;
 decoderScripts.rle = `${import.meta.env.BASE_URL}assets/dwv/decoders/dwv/decode-rle.js`;
 
+const StyledAppBar = styled(AppBar)(({ theme }) => ({ position: 'relative' }));
+const TransitionUp = React.forwardRef((props, ref) => <Slide direction="up" ref={ref} {...props} />);
 
-const StyledAppBar = styled(AppBar)(({ theme }) => ({
-  position: 'relative',
-}));
-
-const StyledTitle = styled(Typography)(({ theme }) => ({
-  flex: '0 0 auto',
-  padding: theme.spacing ? theme.spacing(2) : "8px",
-}));
-
-export const TransitionUp = React.forwardRef((props, ref) => (
-  <Slide direction="up" {...props} ref={ref} />
-));
 class DwvComponent extends React.Component {
-
   constructor(props) {
     super(props);
     this.state = {
-      versions: {
-        dwv: getDwvVersion(),
-        react: React.version
-      },
       tools: {
         Scroll: {},
         ZoomAndPan: {},
         WindowLevel: {},
-        Draw: {
-          options: ['Ruler']
-        }
+        Draw: { options: ['Ruler'] },
       },
       selectedTool: 'Select Tool',
       loadProgress: 0,
       dataLoaded: false,
       dwvApp: null,
-      metaData: {},
-      orientation: undefined,
       showDicomTags: false,
-      dropboxDivId: 'dropBox',
-      dropboxClassName: 'dropBox',
-      borderClassName: 'dropBoxBorder',
-      hoverClassName: 'hover'
+      uploadedCBCTFiles: [],
+      uploading: false,
     };
-  }
-
-  render() {
-    const { classes } = this.props;
-    const { versions, tools, loadProgress, dataLoaded, metaData } = this.state;
-
-    const handleToolChange = (event, newTool) => {
-      if (newTool) {
-        this.onChangeTool(newTool);
-      }
-    };
-    const toolsButtons = Object.keys(tools).map( (tool) => {
-      return (
-        <ToggleButton value={tool} key={tool} title={tool}
-          disabled={!dataLoaded || !this.canRunTool(tool)}>
-          { this.getToolIcon(tool) }
-        </ToggleButton>
-      );
-    });
-
-    return (
-      <div id="dwv">
-        <LinearProgress variant="determinate" value={loadProgress} />
-        <Stack direction="row" spacing={1} padding={1}
-          justifyContent="center" flexWrap="wrap">
-          <ToggleButtonGroup size="small"
-            color="primary"
-            value={ this.state.selectedTool }
-            exclusive
-            onChange={handleToolChange}
-          >
-            {toolsButtons}
-          </ToggleButtonGroup>
-
-          <ToggleButton size="small"
-            value="reset"
-            title="Reset"
-            disabled={!dataLoaded}
-            onChange={this.onReset}
-          ><RefreshIcon /></ToggleButton>
-
-          <ToggleButton size="small"
-            value="toggleOrientation"
-            title="Toggle Orientation"
-            disabled={!dataLoaded}
-            onClick={this.toggleOrientation}
-          ><CameraswitchIcon /></ToggleButton>
-
-          <ToggleButton size="small"
-            value="tags"
-            title="Tags"
-            disabled={!dataLoaded}
-            onClick={this.handleTagsDialogOpen}
-          ><LibraryBooksIcon /></ToggleButton>
-
-          <Dialog
-            open={this.state.showDicomTags}
-            onClose={this.handleTagsDialogClose}
-            TransitionComponent={TransitionUp}
-            >
-              <StyledAppBar position="sticky">
-                <Toolbar>
-                  <IconButton color="inherit" onClick={this.handleTagsDialogClose} aria-label="Close">
-                    <CloseIcon />
-                  </IconButton>
-                  <Typography variant="h6" color="inherit">
-                    DICOM Tags
-                  </Typography>
-                </Toolbar>
-              </StyledAppBar>
-             
-          </Dialog>
-        </Stack>
-
-        <div id="layerGroup0" className="layerGroup">
-          <div id="dropBox"></div>
-        </div>
-
-        <div><p className="legend">
-          
-        </p></div>
-
-      </div>
-    );
   }
 
   componentDidMount() {
     const app = new App();
     app.init({
-      "dataViewConfigs": {'*': [{divId: 'layerGroup0'}]},
-      "tools": this.state.tools
+      dataViewConfigs: {
+        '*': [
+          { divId: 'layerGroup0', orientation: 'axial' },
+          { divId: 'layerGroup1', orientation: 'coronal' },
+          { divId: 'layerGroup2', orientation: 'sagittal' }
+        ]
+      },
+      tools: this.state.tools
     });
 
-    // load events
-    let nLoadItem = null;
-    let nReceivedLoadError = null;
-    let nReceivedLoadAbort = null;
-    let isFirstRender = null;
-    app.addEventListener('loadstart', (/*event*/) => {
-      // reset flags
-      nLoadItem = 0;
-      nReceivedLoadError = 0;
-      nReceivedLoadAbort = 0;
-      isFirstRender = true;
-      // hide drop box
-      this.showDropbox(app, false);
-    });
-    app.addEventListener("loadprogress", (event) => {
-      this.setState({loadProgress: event.loaded});
-    });
-    app.addEventListener('renderend', (/*event*/) => {
-      if (isFirstRender) {
-        isFirstRender = false;
-        // available tools
-        let selectedTool = 'ZoomAndPan';
-        if (app.canScroll()) {
-          selectedTool = 'Scroll';
-        }
-        this.onChangeTool(selectedTool);
-      }
-    });
-    app.addEventListener("load", (event) => {
-      // set dicom tags
-      this.setState({metaData: app.getMetaData(event.dataid)});
-      // set data loaded flag
-      this.setState({dataLoaded: true});
-    });
-    app.addEventListener('loadend', (/*event*/) => {
-      if (nReceivedLoadError) {
-        this.setState({loadProgress: 0});
-        alert('Received errors during load. Check log for details.');
-        // show drop box if nothing has been loaded
-        if (!nLoadItem) {
-          this.showDropbox(app, true);
-        }
-      }
-      if (nReceivedLoadAbort) {
-        this.setState({loadProgress: 0});
-        alert('Load was aborted.');
-        this.showDropbox(app, true);
-      }
-    });
-    app.addEventListener('loaditem', (/*event*/) => {
-      ++nLoadItem;
-    });
-    app.addEventListener('loaderror', (event) => {
-      console.error(event.error);
-      ++nReceivedLoadError;
-    });
-    app.addEventListener('loadabort', (/*event*/) => {
-      ++nReceivedLoadAbort;
-    });
+    app.addEventListener("loadprogress", (e) => this.setState({ loadProgress: e.loaded }));
+    app.addEventListener("load", () => {
+  this.setState({ dataLoaded: true });
 
-    // handle key events
-    app.addEventListener('keydown', (event) => {
-      app.defaultOnKeydown(event);
+  // Delay slightly to ensure canvases are initialized
+  setTimeout(() => {
+    ['layerGroup0', 'layerGroup1', 'layerGroup2'].forEach((id) => {
+      const view = app.getViewController().getLayerGroupById(id);
+      if (view && view.display) {
+        const bestScale = view.display.getBestFitScale();
+        view.display.setScale(bestScale, true); // true = preserve position
+        view.draw();
+      }
     });
-    // handle window resize
+  }, 100);
+});
+
+
     window.addEventListener('resize', app.onResize);
 
-    // store
-    this.setState({dwvApp: app});
-
-    // setup drop box
+    this.setState({ dwvApp: app });
     this.setupDropbox(app);
-
-    // possible load from location
-    app.loadFromUri(window.location.href);
   }
 
-  /**
-   * Get the icon of a tool.
-   *
-   * @param {string} tool The tool name.
-   * @returns {Icon} The associated icon.
-   */
-  getToolIcon = (tool) => {
-    let res;
-    if (tool === 'Scroll') {
-      res = (<MenuIcon />);
-    } else if (tool === 'ZoomAndPan') {
-      res = (<SearchIcon />);
-    } else if (tool === 'WindowLevel') {
-      res = (<ContrastIcon />);
-    } else if (tool === 'Draw') {
-      res = (<StraightenIcon />);
+  handleCBCTUploadToS3 = async () => {
+    const { uploadedCBCTFiles } = this.state;
+    const { selectedPatient } = this.props;
+    if (!uploadedCBCTFiles.length || !selectedPatient) return alert('Missing files or patient');
+
+    this.setState({ uploading: true });
+    const zip = new JSZip();
+    uploadedCBCTFiles.forEach((file) => zip.file(file.name, file));
+
+    try {
+      const zipBlob = await zip.generateAsync({ type: 'blob' });
+      const { patientID, age } = selectedPatient;
+      const uploadDate = dayjs().format('YYYY-MM-DD');
+      const key = `${patientID}/CBCT/${uploadDate}-${patientID}-${age}.zip`;
+
+      await Storage.put(key, zipBlob, {
+        contentType: 'application/zip',
+        level: 'public'
+      });
+
+      alert('CBCT ZIP uploaded successfully!');
+    } catch (error) {
+      console.error(error);
+      alert('Upload failed');
+    } finally {
+      this.setState({ uploading: false });
     }
-    return res;
-  }
-
-  /**
-   * Handle a change tool event.
-   * @param {string} tool The new tool name.
-   */
-  onChangeTool = (tool) => {
-    if (this.state.dwvApp) {
-      this.setState({selectedTool: tool});
-      this.state.dwvApp.setTool(tool);
-      if (tool === 'Draw') {
-        this.onChangeShape(this.state.tools.Draw.options[0]);
-      }
-    }
-  }
-
-  /**
-   * Check if a tool can be run.
-   *
-   * @param {string} tool The tool name.
-   * @returns {boolean} True if the tool can be run.
-   */
-  canRunTool = (tool) => {
-    let res;
-    if (tool === 'Scroll') {
-      res = this.state.dwvApp.canScroll();
-    } else if (tool === 'WindowLevel') {
-      res = this.state.dwvApp.canWindowLevel();
-    } else {
-      res = true;
-    }
-    return res;
-  }
-
-  /**
-   * Toogle the viewer orientation.
-   */
-  toggleOrientation = () => {
-    if (typeof this.state.orientation !== 'undefined') {
-      if (this.state.orientation === 'axial') {
-        this.state.orientation = 'coronal';
-      } else if (this.state.orientation === 'coronal') {
-        this.state.orientation = 'sagittal';
-      } else if (this.state.orientation === 'sagittal') {
-        this.state.orientation = 'axial';
-      }
-    } else {
-      // default is most probably axial
-      this.state.orientation = 'coronal';
-    }
-    // update data view config
-    const config = {
-      '*': [
-        {
-          divId: 'layerGroup0',
-          orientation: this.state.orientation
-        }
-      ]
-    };
-    this.state.dwvApp.setDataViewConfigs(config);
-    // render data
-    const dataIds = this.state.dwvApp.getDataIds();
-    for (const dataId of dataIds) {
-      this.state.dwvApp.render(dataId);
-    }
-  }
-
-  /**
-   * Handle a change draw shape event.
-   * @param {string} shape The new shape name.
-   */
-  onChangeShape = (shape) => {
-    if (this.state.dwvApp) {
-      this.state.dwvApp.setToolFeatures({shapeName: shape});
-    }
-  }
-
-  /**
-   * Handle a reset event.
-   */
-  onReset = () => {
-    if (this.state.dwvApp) {
-      this.state.dwvApp.resetDisplay();
-    }
-  }
-
-  /**
-   * Open the DICOM tags dialog.
-   */
-  handleTagsDialogOpen = () => {
-    this.setState({ showDicomTags: true });
-  }
-
-  /**
-   * Close the DICOM tags dialog.
-   */
-  handleTagsDialogClose = () => {
-    this.setState({ showDicomTags: false });
   };
 
-  // drag and drop [begin] -----------------------------------------------------
+  handleOpenDownloadModal = async () => {
+    const { selectedPatient } = this.props;
+    if (!selectedPatient) return;
 
-  /**
-   * Setup the data load drop box: add event listeners and set initial size.
-   */
+    try {
+      const result = await Storage.list(`${selectedPatient.patientID}/CBCT/`, { level: 'public' });
+      const links = await Promise.all(result.results.map(file => Storage.get(file.key, { level: 'public' })));
+
+      const win = window.open('', '_blank');
+      if (win) {
+        win.document.write('<h3>Download CBCT ZIPs</h3>');
+        links.forEach((url, i) => {
+          const name = result.results[i].key.split('/').pop();
+          win.document.write(`<p><a href="${url}" target="_blank">${name}</a></p>`);
+        });
+      }
+    } catch (err) {
+      console.error('Failed to list files:', err);
+      alert('Download failed');
+    }
+  };
+
   setupDropbox = (app) => {
-    this.showDropbox(app, true);
-  }
+    const box = document.getElementById('dropBox');
+    if (!box) return;
+    box.innerHTML = '';
+    const input = document.createElement('input');
+    input.type = 'file';
+    input.multiple = true;
+    input.id = 'input-file';
+    input.style.display = 'none';
+    input.onchange = (e) => {
+      const files = Array.from(e.target.files);
+      this.setState({ uploadedCBCTFiles: files });
+      this.state.dwvApp.loadFiles(files);
+    };
+    const label = document.createElement('label');
+    label.htmlFor = 'input-file';
+    label.style.cursor = 'pointer';
+    label.textContent = 'Click here to upload CBCT files';
+    box.appendChild(input);
+    box.appendChild(label);
+  };
 
-  /**
-   * Default drag event handling.
-   * @param {DragEvent} event The event to handle.
-   */
-  defaultHandleDragEvent = (event) => {
-    // prevent default handling
-    event.stopPropagation();
-    event.preventDefault();
-  }
+  getToolIcon = (tool) => {
+    if (tool === 'Scroll') return <MenuIcon />;
+    if (tool === 'ZoomAndPan') return <SearchIcon />;
+    if (tool === 'WindowLevel') return <ContrastIcon />;
+    if (tool === 'Draw') return <StraightenIcon />;
+  };
 
-  /**
-   * Handle a drag over.
-   * @param {DragEvent} event The event to handle.
-   */
-  onBoxDragOver = (event) => {
-    this.defaultHandleDragEvent(event);
-    // update box border
-    const box = document.getElementById(this.state.dropboxDivId);
-    if (box && box.className.indexOf(this.state.hoverClassName) === -1) {
-        box.className += ' ' + this.state.hoverClassName;
-    }
-  }
-
-  /**
-   * Handle a drag leave.
-   * @param {DragEvent} event The event to handle.
-   */
-  onBoxDragLeave = (event) => {
-    this.defaultHandleDragEvent(event);
-    // update box class
-    const box = document.getElementById(this.state.dropboxDivId);
-    if (box && box.className.indexOf(this.state.hoverClassName) !== -1) {
-        box.className = box.className.replace(' ' + this.state.hoverClassName, '');
-    }
-  }
-
-  /**
-   * Handle a drop event.
-   * @param {DragEvent} event The event to handle.
-   */
-  onDrop = (event) => {
-    this.defaultHandleDragEvent(event);
-    // load files
-    this.state.dwvApp.loadFiles(event.dataTransfer.files);
-  }
-
-  /**
-   * Handle a an input[type:file] change event.
-   * @param event The event to handle.
-   */
-  onInputFile = (event) => {
-    if (event.target && event.target.files) {
-      this.state.dwvApp.loadFiles(event.target.files);
-    }
-  }
-
-  /**
-   * Show/hide the data load drop box.
-   * @param show True to show the drop box.
-   */
-  showDropbox = (app, show) => {
-    const box = document.getElementById(this.state.dropboxDivId);
-    if (!box) {
-      return;
-    }
-    const layerDiv = document.getElementById('layerGroup0');
-
-    if (show) {
-      // reset css class
-      box.className = this.state.dropboxClassName + ' ' + this.state.borderClassName;
-      // check content
-      if (box.innerHTML === '') {
-        const p = document.createElement('p');
-        p.appendChild(document.createTextNode('Drag and drop data here or '));
-        // input file
-        const input = document.createElement('input');
-        input.onchange = this.onInputFile;
-        input.type = 'file';
-        input.multiple = true;
-        input.id = 'input-file';
-        input.style.display = 'none';
-        const label = document.createElement('label');
-        label.htmlFor = 'input-file';
-        const link = document.createElement('a');
-        link.appendChild(document.createTextNode('click here'));
-        link.id = 'input-file-link';
-        label.appendChild(link);
-        p.appendChild(input);
-        p.appendChild(label);
-
-        box.appendChild(p);
-      }
-      // show box
-      box.setAttribute('style', 'display:initial');
-      // stop layer listening
-      if (layerDiv) {
-        layerDiv.removeEventListener('dragover', this.defaultHandleDragEvent);
-        layerDiv.removeEventListener('dragleave', this.defaultHandleDragEvent);
-        layerDiv.removeEventListener('drop', this.onDrop);
-      }
-      // listen to box events
-      box.addEventListener('dragover', this.onBoxDragOver);
-      box.addEventListener('dragleave', this.onBoxDragLeave);
-      box.addEventListener('drop', this.onDrop);
-    } else {
-      // remove border css class
-      box.className = this.state.dropboxClassName;
-      // remove content
-      box.innerHTML = '';
-      // hide box
-      box.setAttribute('style', 'display:none');
-      // stop box listening
-      box.removeEventListener('dragover', this.onBoxDragOver);
-      box.removeEventListener('dragleave', this.onBoxDragLeave);
-      box.removeEventListener('drop', this.onDrop);
-      // listen to layer events
-      if (layerDiv) {
-        layerDiv.addEventListener('dragover', this.defaultHandleDragEvent);
-        layerDiv.addEventListener('dragleave', this.defaultHandleDragEvent);
-        layerDiv.addEventListener('drop', this.onDrop);
+  onChangeTool = (tool) => {
+    if (this.state.dwvApp) {
+      this.setState({ selectedTool: tool });
+      this.state.dwvApp.setTool(tool);
+      if (tool === 'Draw') {
+        this.state.dwvApp.setToolFeatures({ shapeName: this.state.tools.Draw.options[0] });
       }
     }
+  };
+
+  render() {
+    const { tools, dataLoaded, selectedTool, loadProgress, showDicomTags, uploading } = this.state;
+    const toolsButtons = Object.keys(tools).map((tool) => (
+      <ToggleButton key={tool} value={tool} disabled={!dataLoaded}>{this.getToolIcon(tool)}</ToggleButton>
+    ));
+
+    return (
+      <div id="dwv">
+        <LinearProgress variant="determinate" value={loadProgress} />
+        <Stack direction="row" spacing={1} padding={1} justifyContent="center" flexWrap="wrap">
+          <ToggleButtonGroup size="small" color="primary" value={selectedTool} exclusive onChange={(e, tool) => tool && this.onChangeTool(tool)}>
+            {toolsButtons}
+          </ToggleButtonGroup>
+          <ToggleButton size="small" disabled={!dataLoaded} onClick={() => this.state.dwvApp.resetDisplay()}><RefreshIcon /></ToggleButton>
+          <ToggleButton size="small" disabled={!dataLoaded} onClick={() => this.setState({ showDicomTags: true })}><LibraryBooksIcon /></ToggleButton>
+        </Stack>
+
+        <Button variant="contained" color="primary" disabled={!this.state.uploadedCBCTFiles.length || uploading} onClick={this.handleCBCTUploadToS3}>
+          {uploading ? 'Uploading CBCT...' : 'Save CBCT to S3'}
+        </Button>
+        <Button variant="outlined" color="primary" onClick={this.handleOpenDownloadModal}>Download CBCT File</Button>
+
+        <Dialog open={showDicomTags} onClose={() => this.setState({ showDicomTags: false })} TransitionComponent={TransitionUp}>
+          <StyledAppBar position="sticky">
+            <Toolbar>
+              <IconButton edge="start" color="inherit" onClick={() => this.setState({ showDicomTags: false })} aria-label="close">
+                <CloseIcon />
+              </IconButton>
+              <Typography variant="h6">DICOM Tags</Typography>
+            </Toolbar>
+          </StyledAppBar>
+        </Dialog>
+
+        <div style={{ display: 'flex', gap: '10px', marginTop: '10px' }}>
+          <div id="layerGroup0" className="layerGroup" style={{ flex: 1, height: '70vh', border: '1px solid #ccc' }}></div>
+          <div id="layerGroup1" className="layerGroup" style={{ flex: 1, height: '70vh', border: '1px solid #ccc' }}></div>
+          <div id="layerGroup2" className="layerGroup" style={{ flex: 1, height: '70vh', border: '1px solid #ccc' }}></div>
+        </div>
+
+        <div id="dropBox" style={{ textAlign: 'center', marginTop: 16 }}></div>
+      </div>
+    );
   }
-} // DwvComponent
+}
 
 DwvComponent.propTypes = {
-  classes: PropTypes.object.isRequired,
+  selectedPatient: PropTypes.shape({
+    patientID: PropTypes.string.isRequired,
+    age: PropTypes.oneOfType([PropTypes.string, PropTypes.number])
+  }).isRequired
 };
 
 export default DwvComponent;
