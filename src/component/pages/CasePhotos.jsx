@@ -2,6 +2,9 @@ import React, { useState } from 'react';
 import { Typography, Box, Button, IconButton, Dialog,Grid,Paper,Table, TableBody, TableCell, TableContainer, TableHead, TableRow, } from '@mui/material';
 import { PhotoCamera, Delete, Visibility } from '@mui/icons-material';
 import { CSVLink } from 'react-csv';
+import JSZip from 'jszip';
+import { Storage } from 'aws-amplify';
+import dayjs from 'dayjs';
 import { TextField } from '@mui/material';
 export default function CasePhotos({ selectedPatient, casePhotoRecords }) {
   const [prePhotos, setPrePhotos] = useState([]);
@@ -45,10 +48,11 @@ export default function CasePhotos({ selectedPatient, casePhotoRecords }) {
   const handleFileChange = (event, type) => {
     const files = Array.from(event.target.files);
     const newFiles = files.map((file) => ({
+      file, // original File object
       url: URL.createObjectURL(file),
       type: file.type.includes('pdf') ? 'pdf' : 'image',
     }));
-
+  
     if (type === 'pre') {
       setPrePhotos((prev) => [...prev, ...newFiles]);
     } else if (type === 'post') {
@@ -67,7 +71,39 @@ export default function CasePhotos({ selectedPatient, casePhotoRecords }) {
       setLabReports((prev) => prev.filter((_, i) => i !== index));
     }
   };
-
+  async function uploadZipToS3(type, files, selectedPatient) {
+    if (!files.length || !selectedPatient) {
+      alert("Missing files or patient");
+      return;
+    }
+  
+    const zip = new JSZip();
+    for (const fileObj of files) {
+      const file = fileObj.file; // use the original File object directly
+      zip.file(file.name, file);
+    }
+  
+    try {
+      const zipBlob = await zip.generateAsync({ type: 'blob' });
+      let folder = '';
+      if (type === 'pre') folder = 'CasePhotos/Pre/';
+      else if (type === 'post') folder = 'CasePhotos/Post/';
+      else if (type === 'lab') folder = 'LabReport/';
+  
+      const key = `${selectedPatient.patientID}/${folder}${dayjs().format("YYYY-MM-DD")}-${type}.zip`;
+  
+      await Storage.put(key, zipBlob, {
+        contentType: 'application/zip',
+        level: 'public',
+      });
+  
+      alert(`${type} files uploaded to S3 successfully!`);
+    } catch (error) {
+      console.error("Upload failed:", error);
+      alert("Upload to S3 failed");
+    }
+  }
+  
   return (
     <Box sx={{ padding: 1 }}>
       {selectedPatient ? (
@@ -98,14 +134,43 @@ export default function CasePhotos({ selectedPatient, casePhotoRecords }) {
                 </Typography>
               )}
               </Box>
-              <Button variant="contained" component="label" startIcon={<PhotoCamera />} sx={{ marginTop: 2, backgroundColor: '#343a40',
-            color: '#f8f9fa',
-            '&:hover': {
-              backgroundColor: '#23272b',
-            }, }}>
-                 Pre-Treatment
-                <input type="file" hidden accept="image/*" multiple onChange={(e) => handleFileChange(e, 'pre')} />
-              </Button>
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', marginTop: 2 }}>
+  <Button
+    variant="contained"
+    component="label"
+    startIcon={<PhotoCamera />}
+    sx={{
+      backgroundColor: '#343a40',
+      color: '#f8f9fa',
+      '&:hover': {
+        backgroundColor: '#23272b',
+      },
+    }}
+  >
+    Pre-Treatment
+    <input
+      type="file"
+      hidden
+      accept="image/*"
+      multiple
+      onChange={(e) => handleFileChange(e, 'pre')}
+    />
+  </Button>
+
+  <Button
+    variant="contained"
+    sx={{
+      backgroundColor: '#343a40',
+      color: '#f8f9fa',
+      '&:hover': {
+        backgroundColor: '#23272b',
+      },
+    }}
+    onClick={() => uploadZipToS3('pre', prePhotos, selectedPatient)}
+  >
+    Save to S3
+  </Button>
+</Box>
             </Paper>
           </Grid>
           <Grid item xs={12} md={4}>
@@ -131,7 +196,8 @@ export default function CasePhotos({ selectedPatient, casePhotoRecords }) {
                 </Typography>
               )}
               </Box>
-              <Button variant="contained" component="label" startIcon={<PhotoCamera />} sx={{ marginTop: 2,  backgroundColor: '#343a40',
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', marginTop: 2 }}>
+              <Button variant="contained" component="label" startIcon={<PhotoCamera />} sx={{  backgroundColor: '#343a40',
             color: '#f8f9fa',
             '&:hover': {
               backgroundColor: '#23272b',
@@ -139,6 +205,20 @@ export default function CasePhotos({ selectedPatient, casePhotoRecords }) {
                 Post-Treatment
                 <input type="file" hidden accept="image/*" multiple onChange={(e) => handleFileChange(e, 'post')} />
               </Button>
+              <Button
+    variant="contained"
+    sx={{
+      backgroundColor: '#343a40',
+      color: '#f8f9fa',
+      '&:hover': {
+        backgroundColor: '#23272b',
+      },
+    }}
+    onClick={() => uploadZipToS3('post', postPhotos, selectedPatient)}
+  >
+    Save to S3
+  </Button>
+              </Box>
                 </Paper>
                 </Grid>
                 <Grid item xs={12} md={4}>
@@ -170,7 +250,8 @@ export default function CasePhotos({ selectedPatient, casePhotoRecords }) {
                 </Typography>
               )}
               </Box>
-              <Button variant="contained" component="label" startIcon={<PhotoCamera />} sx={{ marginTop: 2, backgroundColor: '#343a40',
+              <Box sx={{ display: 'flex', justifyContent: 'space-between', marginTop: 2 }}>
+              <Button variant="contained" component="label" startIcon={<PhotoCamera />} sx={{ backgroundColor: '#343a40',
             color: '#f8f9fa',
             '&:hover': {
               backgroundColor: '#23272b',
@@ -178,6 +259,20 @@ export default function CasePhotos({ selectedPatient, casePhotoRecords }) {
                  Lab Reports
                 <input type="file" hidden accept="image/*,application/pdf" multiple onChange={(e) => handleFileChange(e, 'lab')} />
               </Button>
+              <Button
+    variant="contained"
+    sx={{
+      backgroundColor: '#343a40',
+      color: '#f8f9fa',
+      '&:hover': {
+        backgroundColor: '#23272b',
+      },
+    }}
+    onClick={() => uploadZipToS3('lab', labReports, selectedPatient)}
+  >
+    Save to S3
+  </Button>
+              </Box>
                 </Paper>
                 </Grid>
           </Grid>
