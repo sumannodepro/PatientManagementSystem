@@ -104,12 +104,12 @@ const handle2025FilterChange = () => {
   .filter(patient => {
     const matchesSearch =
       patient.doctorname?.toLowerCase().includes(searchQuery.toLowerCase()) ;
-
-    const matches2025 = filter2025 ? patient.date?.startsWith("2025") : true; 
-
+      const matches2025 = filter2025
+      ? new Date(patient.date) >= new Date("2025-04-01")
+      : true;
     return matchesSearch && matches2025;
   })
-  .sort((a, b) => new Date(a.profileId) - new Date(b.profileId)); // ✅ Sorting by date in ascending order
+  .sort((a, b) => new Date(a.date) - new Date(b.date)); // ✅ Sorting by date in ascending order
 
 
   const csvHeaders = [
